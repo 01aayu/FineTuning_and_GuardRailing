@@ -1,41 +1,79 @@
 import streamlit as st
 import requests
+import json
 
-st.title("Medical Chatbot")
+# Ollama API endpoint
+API_URL = "http://localhost:11434/api/generate"
 
-# Set News API key from Streamlit secrets
-api_key = st.secrets["NEWS_API"]
+st.title("Ollama Model Chat Interface")
 
-# Initialize chat history
-if "messages" not in st.session_state:
-    st.session_state.messages = []
+# Initialize chat history if not already done
+if "chat_history" not in st.session_state:
+    st.session_state["chat_history"] = []
 
-# Display chat messages from history on app rerun
-for message in st.session_state.messages:
-    with st.chat_message(message["role"]):
-        st.markdown(message["content"])
+# Initialize prompt state if not already done
+if "prompt" not in st.session_state:
+    st.session_state["prompt"] = ""
 
-# Accept user input
-if prompt := st.chat_input("Ask about current news topics or categories"):
-    # Add user message to chat history
-    st.session_state.messages.append({"role": "user", "content": prompt})
-    with st.chat_message("user"):
-        st.markdown(prompt)
+# Display chat history
+st.write("### Chat History")
+for entry in st.session_state["chat_history"]:
+    st.markdown(f"**User**: {entry['user']}")
+    st.markdown(f"**Model**: {entry['model']}")
+    st.markdown("---")
 
-    # Fetch news based on the user's input (for simplicity, treating the prompt as a category or keyword)
-    url = f"https://newsapi.org/v2/everything?q={prompt}&apiKey={api_key}"
-    response = requests.get(url)
-    news_data = response.json()
+# Input box for the prompt
+prompt = st.text_input("Enter your prompt:", value=st.session_state["prompt"])
 
-    if response.status_code == 200 and news_data["totalResults"] > 0:
-        articles = news_data["articles"]
-        news_response = "\n\n".join([f"**{article['title']}**\n{article['description']}" for article in articles[:3]])
-    else:
-        news_response = "Sorry, no news found for that topic."
+# Automatically execute when a prompt is entered
+if prompt:
+    payload = {
+        "model": "llama3.1_medical",
+        "prompt": prompt
+    }
+    
+    # Initialize empty response text
+    response_text = ""
+    
+    # Add user prompt to chat history
+    st.session_state["chat_history"].append({"user": prompt, "model": ""})
+    
+    try:
+        # Send POST request to Ollama API with stream=True
+        response = requests.post(API_URL, json=payload, stream=True)
+        
+        if response.status_code == 200:
+            # Placeholder to display the model's response as it's being streamed
+            response_placeholder = st.empty()
+            
+            # Append response parts to build a continuous response
+            for line in response.iter_lines():
+                if line:
+                    try:
+                        # Parse each line as JSON
+                        line_data = json.loads(line)
+                        
+                        # Append each part of the response
+                        response_text += line_data.get('response', " ")
+                        
+                        # Update placeholder with the latest accumulated response in paragraph format
+                        response_placeholder.markdown(f"<p style='white-space: pre-wrap;'>{response_text}</p>", unsafe_allow_html=True)
+                        
+                    except json.JSONDecodeError:
+                        st.error("Failed to decode part of the response.")
+                        st.write(line)
+            
+            # Update chat history with the model's final response in paragraph format
+            st.session_state["chat_history"][-1]["model"] = response_text
+            
+            # Clear the input box after processing
+            st.session_state["prompt"] = ""
+        else:
+            st.error(f"Error: {response.status_code}")
+            st.write("Response text:", response.text)
 
-    # Display assistant's response
-    with st.chat_message("assistant"):
-        st.markdown(news_response)
-
-    # Add assistant message to chat history
-    st.session_state.messages.append({"role": "assistant", "content": news_response})
+    except requests.exceptions.RequestException as e:
+        st.error("Failed to connect to the Ollama API.")
+        st.write(e)
+else:
+    st.info("Enter a prompt to start the conversation.")
