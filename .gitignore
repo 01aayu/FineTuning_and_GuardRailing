@@ -1,0 +1,197 @@
+# Operating System Specific
+############################
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Linux
+*~
+
+# IDEs and Editors
+############################
+
+# Eclipse
+.project
+.classpath
+.settings/
+
+# IntelliJ IDEA
+.idea/
+*.iws
+*.iml
+*.ipr
+
+# VSCode
+.vscode/
+
+# Sublime Text
+*.sublime-workspace
+*.sublime-project
+
+# Other
+*.swp
+*~
+*.swo
+
+# Build Artifacts
+############################
+
+# Node.js
+node_modules/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Java
+*.class
+*.jar
+*.war
+*.ear
+
+# C++
+*.o
+*.obj
+*.so
+*.dylib
+*.dll
+
+# Ruby
+*.gem
+*.rbc
+/.bundle
+/log/*
+/tmp/*
+/config/initializers/secret_token.rb
+
+# Compiled source #
+############################
+
+# By language
+
+# JavaScript
+*.min.js
+*.map
+
+# CSS
+*.css.map
+
+# HTML
+*.html.map
+
+# Dependency directories #
+############################
+
+# npm
+node_modules/
+
+# Yarn
+.yarn/
+.pnp/
+
+# Environment variables #
+############################
+
+# Environment files
+.env
+.cfg
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Log files
+*.log
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.swp
+
+# IDE/Editor-specific #
+############################
+
+# JetBrains IDEs
+.idea/
+
+# VSCode
+.vscode/
+
+# Emacs
+*~
+
+# Vim
+*.swp
+
+# Packages
+############################
+
+# Composer
+vendor/
+
+# Yarn
+.yarn/
+.pnp/
+
+# .NET
+bin/
+obj/
+
+# Python
+*.egg-info/
+dist/
+build/
+*.pyc
+
+# Go
+bin/
+*.test
+
+# Rust
+target/
+
+# CMake
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+
+# Documentation
+############################
+
+# Sphinx
+_build/
+
+# MkDocs
+/site/
+
+# User-specific files #
+############################
+
+# macOS
+*.DS_Store
+
+# Windows
+Thumbs.db
+Desktop.ini
+
+# Linux
+*~
+
+# Ignore the config.cfg file
+config.cfg
+
+# Other files you may want to ignore
+node_modules/
+build/
+.env
+/guard/

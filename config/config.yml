@@ -1,0 +1,8 @@
+models:
+  - type: main
+    engine: llama
+    model: llama3.1_medical
+
+rails:
+  input:
+    path: config/rails.xml

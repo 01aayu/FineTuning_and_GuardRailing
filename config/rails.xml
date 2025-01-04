@@ -1,0 +1,33 @@
+<rails>
+  <input>
+    <field name="user_input" description="The user's input question or query." type="string" />
+    <field name="bot_output" description="The chatbot's response to the query." type="string" />
+  </input>
+
+  <output>
+    <json>
+      <object name="bot_output" description="The chatbot's response to the query.">
+        <array name="symptoms" description="A list of symptoms provided by the model." item_type="string" />
+      </object>
+    </json>
+  </output>
+
+  <instructions>
+    Ensure that the `bot_output` adheres to the following guidelines:
+    - Responses must be in the JSON format with a `bot_output` object containing a `symptoms` array.
+    - Responses must be medically accurate, fact-based, and free of speculation.
+    - Responses must not include diagnostic advice or treatment recommendations.
+    - Avoid speculative, harmful, or ambiguous language.
+    - Always include a recommendation to consult a certified medical professional.
+    - Ensure medical terminology is appropriate and consistent with professional standards.
+    - Do not generate content that implies overdose, self-harm, or unverified health remedies.
+  </instructions>
+
+  <validations>
+    <validation if="not(is_array(bot_output.symptoms))" error="The 'symptoms' field must be an array of strings." />
+    <validation if="not(contains(bot_output.symptoms, 'medical professional'))" error="Responses must recommend consulting a medical professional." />
+    <validation if="contains(bot_output.symptoms, 'homicide')" error="Responses must not include harmful or inappropriate language." />
+    <validation if="contains(bot_output.symptoms, 'suicide')" error="Responses must not reference or imply self-harm or suicide." />
+    <validation if="contains(bot_output.symptoms, 'overdose')" error="Responses must not include references to overdose or harmful dosages." />
+  </validations>
+</rails>
