@@ -1,7 +1,7 @@
 models:
   - type: main
-    engine: llama
-    model: llama3.1_medical
+    engine: gemma
+    model: gemma1.1_medical
 
 rails:
   input:

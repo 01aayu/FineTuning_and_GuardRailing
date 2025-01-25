@@ -1,11 +1,25 @@
 import streamlit as st
-import requests
+import pandas as pd
+import requests, os, yaml, re, json, logging
 from ollama import chat
 from guardrails import Guard
-import json
+from datetime import datetime
 import xml.etree.ElementTree as ET
-import logging
 from difflib import unified_diff
+from transformers import pipeline
+
+# Paths
+config_yaml_path = os.path.join("config", "config.yml")
+rails_xml_path = os.path.join("config", "rails.xml")
+
+# Load jailbreak commands from the CSV file
+csv_path = "data/jailbreaks_dataset.csv" 
+try:
+    jailbreak_commands_df = pd.read_csv(csv_path)
+    jailbreak_commands = jailbreak_commands_df['Command'].tolist() 
+except Exception as e:
+    logging.error(f"Error loading jailbreak commands from CSV: {e}")
+    jailbreak_commands = []
 
 # Setup logging
 logging.basicConfig(
@@ -14,31 +28,28 @@ logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(message)s"
 )
 
-st.title("Base Model via API and Guardrailed Model Locally")
+st.title("MAFLONG - Medical Assist Finetuned LLM using Ollama and Nemo Guardrails")
 
 # Initialize chat history
 if "chat_history" not in st.session_state:
     st.session_state["chat_history"] = []
 
-# Dropdown options for models
-base_model_options = ["llama", "mistral", "gemma"]
-guardrailed_model_options = ["llama3.1_medical", "mistral_medical", "gemma1.1_medical"]
-
-# Sidebar for model selection
-st.sidebar.header("Model Selection")
-base_model = st.sidebar.selectbox("Select Base Model", base_model_options)
-guardrailed_model = st.sidebar.selectbox("Select Guardrailed Model", guardrailed_model_options)
-
 # Load Guardrails XML configuration
 def load_guardrails_config():
     try:
-        tree = ET.parse("config/rails.xml")
+        # Load YAML configuration
+        with open(config_yaml_path, "r") as yaml_file:
+            yaml_config = yaml.safe_load(yaml_file)
+            print("YAML Config Loaded:", yaml_config)
+        # Load XML configuration using the rails_xml_path variable
+        tree = ET.parse(rails_xml_path)
         xml_str = ET.tostring(tree.getroot(), encoding="unicode")
         return xml_str
     except Exception as e:
         logging.error(f"Error loading Guardrails config: {e}")
         st.error(f"Error loading Guardrails config: {e}")
-        return None
+        print(f"Error loading YAML or XML file: {e}")
+        return None      
 
 # Initialize Guard instance
 rail_config = load_guardrails_config()
@@ -47,18 +58,39 @@ if rail_config:
 else:
     guard = None
 
-# Apply moderation using Guardrails
+# Load a fine-tuned model for detecting jailbreak prompts
+classifier = pipeline("text-classification", model="madhurjindal/Jailbreak-Detector")
+
+def detect_jailbreak_dynamic(input_text):
+    result = classifier(input_text)[0]
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    logging.info(f"[{timestamp}] Classifier result: {result}")
+    if result['label'] == 'Jailbreak' and result['score'] > 0.6:  # Adjust threshold
+        log_message = f"[{timestamp}] Jailbreak detected with confidence {result['score']}: {input_text}"
+        logging.warning(log_message)
+        # Log the jailbreak attempt
+        with open("jailbreak_attempts.log", "a") as log_file:
+            log_file.write(log_message + "\n")
+        return False, None, None
+    return True, result['score'], timestamp
+
 def moderate_response(bot_output):
     if not guard:
         return {"passed": False, "issues": "Guardrails configuration not loaded."}
-
     try:
+        # Validate bot output using guardrails
         structured_output = json.dumps({"bot_output": {"response": bot_output}})
         validated_output = guard.parse(structured_output)
-        return {"passed": True, "validated_response": validated_output}
+        return {
+            "passed": True,
+            "validated_response": validated_output
+        }
     except Exception as e:
         logging.error(f"Guardrails validation failed: {e}")
-        return {"passed": False, "issues": str(e)}
+        return {
+            "passed": False,
+            "issues": str(e)
+        }
 
 # Process streamed JSON response
 def process_streamed_json(response):
@@ -77,85 +109,91 @@ def process_streamed_json(response):
 prompt = st.text_input("Enter your prompt:")
 
 if prompt:
-    # Get response from base model via Ollama API
-    try:
-        base_response = chat(
-            model=base_model,
-            messages=[{"role": "user", "content": prompt}]
-        )
-        base_output = base_response.message.content
+    # Detect jailbreak attempts in user input
+    jailbreak_detected, score, timestamp = detect_jailbreak_dynamic(prompt)
 
-        # Payload for guardrailed model
-        guardrailed_payload = {
-            "model": guardrailed_model,
-            "prompt": prompt,
-            "max_tokens": 150
-        }
+    if jailbreak_detected:
+        # Log and notify user of the jailbreak attempt
+        st.warning(f"Jailbreak attempt detected with confidence {score}. Proceeding with the prompt.")
+        logging.warning(f"Jailbreak attempt detected: {prompt} (Logged at: {timestamp})")
 
-        # Get response from guardrailed model locally
+        # Log the attempt
+        with open("jailbreak_attempts.log", "a") as log_file:
+            log_file.write(f"Jailbreak attempt detected: {prompt} | Confidence: {score} | Logged at: {timestamp}\n")
+
+    # Proceed to generate responses regardless of jailbreak detection
+    with st.spinner("Generating response, please wait..."):
         try:
-            guard_response = requests.post(
-                "http://localhost:11434/api/generate", 
-                json=guardrailed_payload, 
-                stream=True,  # Enable streaming
-                timeout=10
+            # Get response from base model via Ollama API
+            base_response = chat(
+                model='gemma',
+                messages=[{"role": "user", "content": prompt}]
             )
+            base_output = base_response.message.content
 
-            if guard_response.status_code == 200:
-                guard_output = process_streamed_json(guard_response)
+            # Payload for guardrailed model
+            guardrailed_payload = {
+                "model": 'gemma1.1_medical',
+                "prompt": prompt,
+                "max_tokens": 150
+            }
 
-                # Validate guardrailed output
-                moderation_result = moderate_response(guard_output)
+            # Get response from guardrailed model locally
+            try:
+                guard_response = requests.post(
+                    "http://localhost:11434/api/generate",
+                    json=guardrailed_payload,
+                    stream=True,
+                    timeout=30
+                )
 
-                if moderation_result["passed"]:
-                    # Extract only the response content
-                    validated_response_text = moderation_result["validated_response"].validated_output["bot_output"]["response"]
+                if guard_response.status_code == 200:
+                    guard_output = process_streamed_json(guard_response)
 
-                    # Save to chat history
-                    st.session_state["chat_history"].append({
-                        "user": prompt,
-                        "base_model": base_output,
-                        "guard_model": validated_response_text
-                    })
+                    # Validate guardrailed output
+                    moderation_result = moderate_response(guard_output)
+
+                    if moderation_result["passed"]:
+                        # Extract only the response content
+                        validated_response_text = moderation_result["validated_response"].validated_output["bot_output"]["response"]
+
+                        # Save to chat history
+                        st.session_state["chat_history"].append({
+                            "user": prompt,
+                            "base_model": base_output,
+                            "guard_model": validated_response_text,
+                            "jailbreak_detected": jailbreak_detected,
+                        })
+
+                    else:
+                        st.error("Guardrails validation failed.")
+                        st.write(f"Issues: {moderation_result.get('issues', 'Unknown error')}")
 
                 else:
-                    st.error("Guardrails validation failed.")
-                    st.write(f"Issues: {moderation_result.get('issues', 'Unknown error')}")
+                    st.error(f"Guardrailed Model API Error: {guard_response.status_code}")
+                    logging.error(f"Guardrailed Model API Error: {guard_response.text}")
 
-            else:
-                st.error(f"Guardrailed Model API Error: {guard_response.status_code}")
-                logging.error(f"Guardrailed Model API Error: {guard_response.text}")
+            except requests.exceptions.RequestException as e:
+                logging.error(f"Guardrailed Model request failed: {e}")
+                st.error(f"Guardrailed Model request failed: {e}")
 
-        except requests.exceptions.RequestException as e:
-            logging.error(f"Guardrailed Model request failed: {e}")
-            st.error(f"Guardrailed Model request failed: {e}")
-
-    except Exception as e:
-        logging.error(f"Base Model API request failed: {e}")
-        st.error(f"Base Model API request failed: {e}")
+        except Exception as e:
+            logging.error(f"Base Model API request failed: {e}")
+            st.error(f"Base Model API request failed: {e}")
 
 # Display chat history
 st.write("## Chat History")
 
 for idx, entry in enumerate(st.session_state["chat_history"]):
     st.subheader(f"Conversation #{idx + 1}")
-    
     # User prompt
     st.markdown(f"### **User Prompt**: {entry['user']}")
-
-    # Side-by-side layout for outputs
-    col1, col2 = st.columns(2)
-
     # Base Model Output
-    with col1:
-        st.write("### Base Model Output")
-        st.code(entry['base_model'], language="text")
-
+    st.write("### Base Model Output")
+    st.code(entry['base_model'], language="text")
     # Guardrailed Model Output
-    with col2:
-        st.write("### Guardrailed Model Output")
-        st.code(entry['guard_model'], language="text")
-
+    st.write("### Guardrailed Model Output")
+    st.code(entry['guard_model'], language="text")
     # Highlight differences
     st.write("### Differences")
     diff = unified_diff(
@@ -164,5 +202,5 @@ for idx, entry in enumerate(st.session_state["chat_history"]):
         lineterm=""
     )
     st.code("\n".join(diff), language="diff")
-
     st.markdown("---")
+

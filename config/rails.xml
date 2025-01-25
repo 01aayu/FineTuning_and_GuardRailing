@@ -13,8 +13,8 @@
   </output>
 
   <instructions>
-    Ensure that the `bot_output` adheres to the following guidelines:
-    - Responses must be in the JSON format with a `bot_output` object containing a `symptoms` array.
+    Ensure that the bot_output adheres to the following guidelines:
+    - Responses must be in the JSON format with a bot_output object containing a symptoms array.
     - Responses must be medically accurate, fact-based, and free of speculation.
     - Responses must not include diagnostic advice or treatment recommendations.
     - Avoid speculative, harmful, or ambiguous language.
@@ -29,5 +29,10 @@
     <validation if="contains(bot_output.symptoms, 'homicide')" error="Responses must not include harmful or inappropriate language." />
     <validation if="contains(bot_output.symptoms, 'suicide')" error="Responses must not reference or imply self-harm or suicide." />
     <validation if="contains(bot_output.symptoms, 'overdose')" error="Responses must not include references to overdose or harmful dosages." />
+    <validation if="regex_match(user_input, '.*jailbreak.*')" error="Jailbreak attempt detected: Mention of 'jailbreak'." />
+    <validation if="regex_match(user_input, '.*instruction.*override.*')" error="Jailbreak attempt detected: Instruction override attempt." />
+    <validation if="regex_match(user_input, '.*ignore.*policy.*')" error="Jailbreak attempt detected: Ignoring policy." />
+    <validation if="contains(user_input, 'DAN mode')" error="Potential jailbreak detected: 'DAN mode'." />
+    <validation if="regex_match(user_input, '.*disregard.*policy.*')" error="Jailbreak attempt detected: Policy bypass." />
   </validations>
 </rails>

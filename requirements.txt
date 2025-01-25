@@ -1,5 +1,8 @@
 nemoguardrails
+transformers
 ollama
 langchain_openai
+tensorflow
+tf-keras
 guardrails-ai
 python-dotenv
