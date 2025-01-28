@@ -62,17 +62,17 @@ else:
 classifier = pipeline("text-classification", model="madhurjindal/Jailbreak-Detector")
 
 def detect_jailbreak_dynamic(input_text):
-    result = classifier(input_text)[0]
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    logging.info(f"[{timestamp}] Classifier result: {result}")
-    if result['label'] == 'Jailbreak' and result['score'] > 0.6:  # Adjust threshold
-        log_message = f"[{timestamp}] Jailbreak detected with confidence {result['score']}: {input_text}"
-        logging.warning(log_message)
-        # Log the jailbreak attempt
-        with open("jailbreak_attempts.log", "a") as log_file:
-            log_file.write(log_message + "\n")
-        return False, None, None
-    return True, result['score'], timestamp
+    # Check against commands in the CSV file
+    for command in jailbreak_commands:
+        if command.lower() in input_text.lower():
+            log_message = f"[{timestamp}] Jailbreak attempt detected: '{command}' | Input: '{input_text}'"
+            logging.warning(log_message)
+            # Log the jailbreak attempt
+            with open("jailbreak_attempts.log", "a") as log_file:
+                log_file.write(log_message + "\n")
+            return True, command, timestamp
+    return False, command, timestamp
 
 def moderate_response(bot_output):
     if not guard:
@@ -111,15 +111,10 @@ prompt = st.text_input("Enter your prompt:")
 if prompt:
     # Detect jailbreak attempts in user input
     jailbreak_detected, score, timestamp = detect_jailbreak_dynamic(prompt)
-
     if jailbreak_detected:
         # Log and notify user of the jailbreak attempt
-        st.warning(f"Jailbreak attempt detected with confidence {score}. Proceeding with the prompt.")
-        logging.warning(f"Jailbreak attempt detected: {prompt} (Logged at: {timestamp})")
-
-        # Log the attempt
-        with open("jailbreak_attempts.log", "a") as log_file:
-            log_file.write(f"Jailbreak attempt detected: {prompt} | Confidence: {score} | Logged at: {timestamp}\n")
+        st.warning(f"Jailbreak attempt detected. Proceeding with the prompt.")
+        logging.warning(f"Jailbreak attempt detected: {prompt} | Logged at: {timestamp}")
 
     # Proceed to generate responses regardless of jailbreak detection
     with st.spinner("Generating response, please wait..."):
