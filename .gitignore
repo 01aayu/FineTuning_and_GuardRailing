@@ -190,8 +190,10 @@ Desktop.ini
 # Ignore the config.cfg file
 config.cfg
 
+
 # Other files you may want to ignore
 node_modules/
 build/
 .env
 /guard/
+.webui_secret_key
